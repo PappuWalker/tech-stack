@@ -22,7 +22,11 @@ export default function Home() {
   const [iconSize, setIconSize] = useState(80);
   const [rotation, setRotation] = useState({ x: 0, y: 0 });
   const [paused, setPaused] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [spinSpeed, setSpinSpeed] = useState({ x: 0, y: 0 });
+  const [lastMousePos, setLastMousePos] = useState({ x: 0, y: 0 });
   const requestRef = useRef<number>(0);
+  const lastTimeRef = useRef<number>(0);
 
   // Handle responsive sizing
   useEffect(() => {
@@ -62,20 +66,54 @@ export default function Home() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handleKeyDown]);
 
+  // Mouse event handlers for spinning
+  const handleMouseDown = (e: React.MouseEvent) => {
+    setIsDragging(true);
+    setLastMousePos({ x: e.clientX, y: e.clientY });
+    setPaused(true);
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging) return;
+    
+    const deltaX = e.clientX - lastMousePos.x;
+    const deltaY = e.clientY - lastMousePos.y;
+    
+    setSpinSpeed({
+      x: deltaX * 0.1,
+      y: deltaY * 0.1
+    });
+    
+    setLastMousePos({ x: e.clientX, y: e.clientY });
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+    setPaused(false);
+  };
+
+  // Modified animation effect
   useEffect(() => {
     let last = Date.now();
     const animate = () => {
+      const now = Date.now();
+      const delta = (now - last) / 1000;
+      last = now;
+
       if (!paused) {
-        const now = Date.now();
-        const delta = (now - last) / 1000;
-        last = now;
+        // Apply spin speed with decay
         setRotation((rot) => ({
-          x: rot.x + 0.15 * delta,
-          y: rot.y + 0.25 * delta,
+          x: rot.x + (spinSpeed.x + 0.15) * delta,
+          y: rot.y + (spinSpeed.y + 0.25) * delta,
         }));
-      } else {
-        last = Date.now();
+
+        // Decay spin speed
+        setSpinSpeed((speed) => ({
+          x: speed.x * 0.95,
+          y: speed.y * 0.95,
+        }));
       }
+
       requestRef.current = requestAnimationFrame(animate);
     };
     requestRef.current = requestAnimationFrame(animate);
@@ -95,8 +133,13 @@ export default function Home() {
           <div
             className={styles.iconCloudInner}
             style={{
-              transform: `rotateX(${rotation.x * 40}deg) rotateY(${rotation.y * 60}deg)`
+              transform: `rotateX(${rotation.x * 40}deg) rotateY(${rotation.y * 60}deg)`,
+              cursor: isDragging ? 'grabbing' : 'grab'
             }}
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseUp}
           >
             {ICONS.map((name, i) => {
               const { x, y, z } = getSpherePosition(i, ICONS.length, radius);
